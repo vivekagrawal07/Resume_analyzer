@@ -1,8 +1,18 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChartBarIcon, DocumentTextIcon, LightBulbIcon, ExclamationIcon } from "@heroicons/react/outline";
+import { 
+  CheckCircleIcon, 
+  ExclamationTriangleIcon, 
+  ClipboardDocumentIcon,
+  DocumentTextIcon,
+  ChartBarIcon,
+  ArrowUpTrayIcon,
+  LightBulbIcon,
+  SparklesIcon
+} from '@heroicons/react/24/outline';
+import { twMerge } from 'tailwind-merge';
 
 interface AnalysisResult {
   score: number;
@@ -20,6 +30,8 @@ interface AnalysisResult {
   formatIssues: string[];
 }
 
+const API_URL = 'https://server-git-main-vivek-agrawal-projects.vercel.app';
+
 const AnimatedBackground = () => (
   <div className="fixed inset-0 -z-10">
     {/* Gradient Orbs */}
@@ -32,7 +44,7 @@ const AnimatedBackground = () => (
   </div>
 );
 
-const App = () => {
+const App: React.FC = () => {
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -40,6 +52,17 @@ const App = () => {
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const sections: { name: string; present: boolean }[] = [
+    { name: "Contact Information", present: true },
+    { name: "Professional Summary", present: true },
+    { name: "Work Experience", present: true },
+    { name: "Education", present: true },
+    { name: "Skills", present: true },
+    { name: "Projects", present: false },
+    { name: "Certifications", present: false },
+    { name: "Awards", present: false }
+  ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -51,37 +74,142 @@ const App = () => {
   const handleAnalyze = async () => {
     setLoading(true);
     setError(null);
-    try {
-      const formData = new FormData();
-      formData.append('resumeText', resumeText);
-      formData.append('jobDescription', jobDescription);
-      if (file) {
-        formData.append('file', file);
-      }
+    
+    // Input validation
+    if (!file && !resumeText.trim()) {
+      setError("Please upload a resume file or paste resume text");
+      setLoading(false);
+      return;
+    }
+    
+    if (!jobDescription.trim()) {
+      setError("Please provide a job description");
+      setLoading(false);
+      return;
+    }
 
-      const res = await fetch("http://localhost:3000/api/analyze", {
-        method: "POST",
-        body: formData,
-      });
+    try {
+      // Log the request details
+      const requestUrl = `${API_URL}/api/resume/analyze`;
+      console.log('Request URL:', requestUrl);
+      console.log('Request method: POST');
       
-      const data = await res.json();
+      let res;
+      
+      if (file) {
+        // Handle file upload with multipart/form-data
+        const formData = new FormData();
+        formData.append('resumeFile', file);
+        formData.append('jobDescription', jobDescription.trim());
+        
+        // Log form data entries
+        for (const [key, value] of formData.entries()) {
+          console.log(`${key}:`, value);
+        }
+        
+        res = await fetch(requestUrl, {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+      } else {
+        // Handle text input with application/json
+        const requestBody = {
+          resumeText: resumeText.trim(),
+          jobDescription: jobDescription.trim()
+        };
+        
+        console.log('Request body:', requestBody);
+        
+        res = await fetch(requestUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify(requestBody)
+        });
+      }
+      
+      console.log('Response status:', res.status);
+      console.log('Response headers:', Object.fromEntries(res.headers.entries()));
+      
+      const responseText = await res.text();
+      console.log('Raw response:', responseText);
+      
+      // Check if the response is HTML (error page)
+      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.includes('<html')) {
+        console.error('Received HTML error page instead of JSON response');
+        throw new Error('Server returned an error page. Please try again later.');
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse response as JSON:', e);
+        console.error('Response content:', responseText);
+        throw new Error('Invalid response format from server. Please try again later.');
+      }
       
       if (!res.ok) {
-        if (res.status === 429) {
-          throw new Error("API quota exceeded. Please try again later.");
-        } else if (res.status === 403) {
-          throw new Error("Access denied. Please check your API key and permissions.");
+        console.error('Error response data:', data);
+        if (res.status === 500) {
+          console.error('Server error details:', {
+            status: res.status,
+            statusText: res.statusText,
+            headers: Object.fromEntries(res.headers.entries()),
+            body: data,
+            requestUrl,
+            requestMethod: 'POST'
+          });
+          
+          // Check for specific error messages
+          if (data.error === 'Something broke!') {
+            throw new Error('The server encountered an unexpected error. Please try again in a few minutes or contact support if the issue persists.');
+          }
+          
+          throw new Error('Server encountered an error. Please try again later or contact support if the issue persists.');
         }
-        throw new Error(data.details || data.error || `Error: ${res.status} ${res.statusText}`);
+        throw new Error(data.error || data.details || `Error: ${res.status} ${res.statusText}`);
       }
       
-      setAnalysis(data.result);
+      // Update the analysis state with the server's response format
+      setAnalysis({
+        score: data.overallScore,
+        analysis: {
+          sections: [
+            { name: "Contact Information", present: data.contentAnalysis.hasContactInfo },
+            { name: "Education", present: data.contentAnalysis.hasEducation },
+            { name: "Experience", present: data.contentAnalysis.hasExperience },
+            { name: "Skills", present: data.contentAnalysis.hasSkills },
+            { name: "Summary", present: data.contentAnalysis.hasSummary }
+          ],
+          jobMatch: {
+            percentage: data.skillAnalysis.score,
+            matchedSkills: data.skillAnalysis.matchingSkills.length,
+            totalSkills: data.skillAnalysis.matchingSkills.length + data.skillAnalysis.missingSkills.length
+          }
+        },
+        missingSkills: data.skillAnalysis.missingSkills,
+        strengths: data.chatGPTFeedback.strengths,
+        suggestions: data.chatGPTFeedback.suggestions,
+        formatIssues: data.contentAnalysis.suggestions
+      });
     } catch (error) {
       console.error("Analysis error:", error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        setError("Could not connect to the server. Please make sure the server is running.");
+        setError("Could not connect to the server. Please check your internet connection and try again.");
+      } else if (error instanceof SyntaxError) {
+        setError("Invalid response from server. Please try again later.");
+      } else if (error instanceof Error) {
+        setError(error.message);
       } else {
-        setError(error instanceof Error ? error.message : "An error occurred while analyzing the resume");
+        setError("An unexpected error occurred while analyzing the resume");
       }
       setAnalysis(null);
     } finally {
@@ -96,7 +224,7 @@ const App = () => {
 Resume Analysis Report
 =====================
 
-Score: ${analysis.score}/100
+Score: ${analysis.score.toFixed(2)}/100
 
 Missing Skills:
 ${analysis.missingSkills.map(skill => `- ${skill}`).join('\n')}
@@ -197,9 +325,10 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                       <label className="block w-full h-full cursor-pointer border-2 border-dashed border-blue-400/30 rounded-xl bg-gray-700/30 hover:bg-gray-700/50 transition-colors duration-200">
                         <div className="h-full flex flex-col items-center justify-center p-6">
                           <div className="w-16 h-16 sm:w-20 sm:h-20 mb-4 rounded-full bg-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                            <svg className="w-8 h-8 sm:w-10 sm:h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                            </svg>
+                            <ArrowUpTrayIcon className={twMerge(
+                              "w-8 h-8 sm:w-10 sm:h-10",
+                              file ? "text-green-500" : "text-gray-400"
+                            )} />
                           </div>
                           <p className="text-base sm:text-lg text-blue-200 text-center font-medium">
                             {file ? file.name : "Drop your resume here or click to browse"}
@@ -299,7 +428,9 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                       {/* Main Score */}
                       <div className="text-center md:text-left">
                         <div className="inline-flex items-baseline">
-                          <span className="text-5xl sm:text-6xl font-bold text-white">{analysis.score}</span>
+                          <span className="text-5xl sm:text-6xl font-bold text-white">
+                            {analysis.score.toFixed(2)}
+                          </span>
                           <span className="text-xl sm:text-2xl text-blue-200">/100</span>
                         </div>
                         <p className="mt-2 text-lg sm:text-xl text-blue-100">Overall Score</p>
@@ -312,7 +443,7 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                           className="bg-white/10 backdrop-blur rounded-xl p-4 sm:p-6"
                         >
                           <p className="text-3xl sm:text-4xl font-bold text-white mb-2">
-                            {analysis.analysis.jobMatch.percentage}%
+                            {analysis.analysis.jobMatch.percentage.toFixed(2)}%
                           </p>
                           <p className="text-base sm:text-lg text-blue-100">Job Match</p>
                         </motion.div>
@@ -342,12 +473,12 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                       Resume Sections
                     </h3>
                     <div className="space-y-3">
-                      {analysis.analysis.sections.map((section, index) => (
+                      {sections.map((section) => (
                         <motion.div
                           key={section.name}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.1 }}
+                          transition={{ delay: sections.indexOf(section) * 0.1 }}
                           className="flex items-center justify-between p-3 rounded-xl bg-gray-700/50"
                         >
                           <span className="capitalize font-medium text-gray-100">
@@ -385,9 +516,7 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                           transition={{ delay: index * 0.1 }}
                           className="flex items-start space-x-3 p-3 rounded-xl bg-green-500/10"
                         >
-                          <svg className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
+                          <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 mt-0.5 flex-shrink-0" />
                           <p className="text-green-100">{strength}</p>
                         </motion.div>
                       ))}
@@ -424,7 +553,7 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                     className="w-full bg-gray-800/50 backdrop-blur-xl rounded-2xl shadow-2xl p-4 sm:p-6 border border-white/10"
                   >
                     <h3 className="flex items-center text-lg sm:text-xl font-semibold text-white mb-4">
-                      <LightBulbIcon className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400 mr-3" />
+                      <SparklesIcon className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400 mr-3" />
                       Recommendations
                     </h3>
                     <div className="space-y-3">
@@ -436,9 +565,7 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                           transition={{ delay: index * 0.1 }}
                           className="flex items-start space-x-3 p-3 rounded-xl bg-purple-500/10"
                         >
-                          <svg className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
+                          <ClipboardDocumentIcon className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 mt-0.5 flex-shrink-0" />
                           <p className="text-purple-100">{suggestion}</p>
                         </motion.div>
                       ))}
@@ -455,7 +582,7 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                     className="w-full bg-gray-800/50 backdrop-blur-xl rounded-2xl shadow-2xl p-4 sm:p-6 border border-white/10"
                   >
                     <h3 className="flex items-center text-lg sm:text-xl font-semibold text-white mb-4">
-                      <ExclamationIcon className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400 mr-3" />
+                      <ExclamationTriangleIcon className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400 mr-3" />
                       Format Issues
                     </h3>
                     <div className="space-y-3">
@@ -467,9 +594,7 @@ ${analysis.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}
                           transition={{ delay: index * 0.1 }}
                           className="flex items-center space-x-3 p-3 rounded-xl bg-yellow-500/10"
                         >
-                          <svg className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
+                          <ExclamationTriangleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 flex-shrink-0" />
                           <p className="text-yellow-100">{issue}</p>
                         </motion.div>
                       ))}
