@@ -19,7 +19,16 @@ export default defineConfig({
           'react-vendor': ['react', 'react-dom'],
           'ui-vendor': ['@heroicons/react', 'framer-motion'],
         },
+        format: 'es',
+        entryFileNames: '[name]-[hash].js',
+        chunkFileNames: '[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]'
       },
     },
   },
+  server: {
+    headers: {
+      'Content-Type': 'application/javascript'
+    }
+  }
 })
