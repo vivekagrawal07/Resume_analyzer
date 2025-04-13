@@ -6,7 +6,7 @@ An AI-powered web application that analyzes a resume against a job description a
 
 ## 🚀 Live Demo
 
-🔗 [View the Live App](https://your-resume-analyzer.vercel.app)
+🔗 [View the Live App](https://resume-analyzer-vivek-agrawal-projects.vercel.app/)
 
 > Replace the link with your deployed URL on Vercel or Netlify.
 
@@ -24,14 +24,13 @@ An AI-powered web application that analyzes a resume against a job description a
 
 ---
 
-## 📸 Screenshots
+## 📸 Screenshot – Resume Input Screen
 
-> Upload real screenshots to `/assets` or use image links
+![Resume Input Screenshot](https://drive.google.com/uc?export=view&id=1qS1LF2gGBYexxHAaDRiEuYPtBCYL8-CS)
 
-| Resume Input | AI Analysis |
-|--------------|-------------|
-| ![Resume Input](https://via.placeholder.com/400x250?text=Resume+Input+Screen) | ![AI Output](https://via.placeholder.com/400x250?text=AI+Analysis+Result) |
 
+### 🧠 AI-Powered Analysis Output
+![AI Result Screenshot](https://drive.google.com/uc?export=view&id=1pq9hOnTh4Lyf7QqWz-C1EE3snJT8MvFG)
 ---
 
 ## 🛠 Tech Stack
@@ -53,11 +52,6 @@ An AI-powered web application that analyzes a resume against a job description a
 
 ---
 
-## 🔧 Local Setup
-
-1. Clone the repository
-```bash
-git clone https://github.com/vivekagrawal07/resume-analyzer.git
-cd resume-analyzer
-npm install
-npm run dev
+## 👨‍💻 Author
+**Vivek Agrawal**  
+[GitHub](https://github.com/vivekagrawal07) • [LinkedIn](https://www.linkedin.com/in/VivekAgrawal07/) • [Portfolio](https://portfolio-vivek-agrawal-projects.vercel.app/)
